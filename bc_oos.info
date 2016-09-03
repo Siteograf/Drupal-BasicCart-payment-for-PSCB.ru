@@ -1,0 +1,12 @@
+name = Basic Cart OOS paypent system
+description = A basic shopping cart implementation.
+package = Basic Cart
+core = 7.x
+configure = admin/config/basic_cart/oos
+
+; Information added by  packaging script on 2013-12-03
+version = "7.x-3.0"
+core = "7.x"
+project = "bc_oos"
+datestamp = "1386088707"
+

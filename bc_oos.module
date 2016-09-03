@@ -1,0 +1,177 @@
+<?php
+
+/**
+ * @file
+ * Basic cart module file.
+ */
+
+/**
+ * Implements hook_block_info().
+ */
+function bc_oos_block_info()
+{
+    $blocks['oos_payment'] = array(
+        'info' => t('OOS payment form'),
+        'cache' => DRUPAL_NO_CACHE,
+    );
+    return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function bc_oos_block_view($delta = '')
+{
+    // Check if the current user has access.
+    switch ($delta) {
+        case 'oos_payment':
+//          $block['subject'] = t('Оплатить онлайн');
+            $block['content'] = drupal_get_form('bc_oos_form');
+            return $block;
+            break;
+    }
+}
+
+/**
+ * Form to build the submission to oos.pscb.ru.
+ */
+function bc_oos_form($form, &$form_state)
+{
+    $node = node_load(arg(1));
+
+    $result = db_query("SELECT nid FROM {basic_cart_order_node} WHERE oid = :currentNid", array(':currentNid' => $node->nid));
+
+    $data = array();
+    foreach ($result as $node) {
+        $nodeObject = node_load($node->nid);
+
+        $data[] = array(
+            theme('image_style', array('style_name' => 'cart', 'path' => $nodeObject->field_images['und'][0]['uri'])),
+            $nodeObject->title,
+            intval($nodeObject->price['und'][0]["value"]) . ' руб'
+    );
+    }
+
+    $form['table'] = array(
+        '#theme' => 'table',
+        '#header' => array('', '', ''),
+        '#rows' => $data,
+    );
+
+    $node = node_load(arg(1));
+
+    if(!$node->body){
+        $comment = '';
+    } else {
+        $comment = $node->body['und']['0']['safe_value'];
+    }
+
+    $message = array(
+        "amount" => intval($node->field_total_price['und']['0']['safe_value']),
+        "details" => "test payment",
+        "customerRating" => "5",
+        "customerAccount" => drupal_substr($node->title, 0, 128),
+        "orderId" => $node->nid,
+        "successUrl" => variable_get('bc_url_success', ''),
+        "failUrl" => variable_get('bc_url_fail', ''),
+        "paymentMethod" => "",
+        "customerPhone" => strip_tags($node->field_phone['und']['0']['safe_value']),
+        "customerEmail" => strip_tags($node->field_email['und']['0']['safe_value']),
+        "customerComment" => strip_tags($node->field_address['und']['0']['safe_value'] . ' === ' . $comment),
+        "data" => array(
+            "user" => "",
+            "debug" => "1",
+        )
+    );
+    $messageText = json_encode($message);
+//    echo $messageText;
+//    die;
+
+    $data = array(
+        "marketPlace" => variable_get('bc_oos_market_id', '32'),
+        "message" => base64_encode($messageText),
+        "signature" => hash('sha256', $messageText . variable_get('bc_oos_secret_key', '111111'))
+    );
+
+    foreach ($data as $name => $value) {
+        $form[$name] = array('#type' => 'hidden', '#value' => $value);
+    }
+
+    $form['#action'] = variable_get('bc_oos_payment_page');
+
+    $form['actions'] = array('#type' => 'actions');
+    $form['actions']['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Оплатить онлайн'),
+        '#attributes' => array('class' => array('zakaz')),
+    );
+    return $form;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function bc_oos_menu()
+{
+    $items = array();
+
+    $items['admin/config/basic_cart/oos'] = array(
+        'title' => 'OOS payment',
+        'description' => 'Basic cart checkout settings.',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('bc_oos_settings_form'),
+        'access arguments' => array('administer basic cart'),
+        'type' => MENU_NORMAL_ITEM,
+        'weight' => 10,
+    );
+    return $items;
+}
+
+/**
+ * Adds OOS settings to the payment method settings form.
+ *
+ * @see uc_oos_uc_payment_method()
+ */
+function bc_oos_settings_form($op, &$order, $form = NULL, &$form_state = NULL)
+{
+    $form['bc_oos_market_id'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Market Place ID'),
+        '#description' => t('ID Вашего магазина в системе ООС'),
+        '#default_value' => variable_get('bc_oos_market_id', ''),
+        '#size' => 16,
+    );
+    $form['bc_oos_secret_key'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Ключ API'),
+        '#description' => t('Ключ API в личном кабинете системы ООС'),
+        '#default_value' => variable_get('bc_oos_secret_key', '111111'),
+        '#size' => 64,
+    );
+
+    $form['bc_oos_payment_page'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Payment URL'),
+        '#description' => t('Cтраница банка для обработки запроса'),
+        '#default_value' => variable_get('bc_oos_payment_page', 'https://oosdemo.pscb.ru/pay/'),
+        '#size' => 64,
+    );
+
+    $form['bc_url_success'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Success URL'),
+        '#default_value' => variable_get('bc_url_success', ""),
+    );
+    $form['bc_url_fail'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Fail URL'),
+        '#default_value' => variable_get('bc_url_fail', ""),
+    );
+    $form['uc_oos_method_title'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Payment method title'),
+        '#default_value' => variable_get('bc_oos_method_title', t('OOS Payment System:')),
+    );
+
+    return system_settings_form($form);
+}
