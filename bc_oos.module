@@ -10,11 +10,6 @@
  */
 function bc_oos_block_info()
 {
-    $blocks['oos_payment'] = array(
-        'info' => t('OOS payment form'),
-        'cache' => DRUPAL_NO_CACHE,
-    );
-
     $blocks['oos_products_in_order'] = array(
         'info' => t('OOS Products in current order'),
         'cache' => DRUPAL_NO_CACHE,
@@ -32,26 +27,19 @@ function bc_oos_block_info()
  */
 function bc_oos_block_view($delta = '')
 {
-    // Check if the current user has access.
+    $block = array();
     switch ($delta) {
-        case 'oos_payment':
-//          $block['subject'] = t('Оплатить онлайн');
-            $block['content'] = drupal_get_form('bc_oos_form');
-            return $block;
-            break;
-
         case 'oos_products_in_order':
             $block['subject'] = t('Товары заказа');
             $block['content'] = bc_oos_products_in_order();
-            return $block;
             break;
 
         case 'oos_order_status':
             $block['subject'] = t('Статус оплаты');
             $block['content'] = bc_ooc_check_order_status();
-            return $block;
             break;
     }
+    return $block;
 }
 
 function bc_oos_products_in_order()
@@ -209,24 +197,32 @@ function bc_oos_settings_form($op, &$order, $form = NULL, &$form_state = NULL)
 
 function bc_ooc_check_order_status()
 {
-
     $status = bc_ooc_merchant_api();
     var_dump($status);
 
     if ($status['status'] === 'STATUS_SUCCESS') {
 
-        $out = "Платёж найден\n";
+
         $state = $status['payment']['state'];
         $amount = $status['payment']['amount'];
 
         if ($state == 'end') {
-            $out .= "Платеж на сумму $amount проведен\n";
+            $text = "Платёж найден. Платеж на сумму $amount руб. успешно проведен.";
+            drupal_set_message($text, 'status');
         } else {
-            $out .= "Платеж на сумму $amount находится в состоянии $state\n";
+            $text = "Платеж на сумму $amount руб. не проведен и находится в состоянии $state.";
+            drupal_set_message($text, 'warning');
         }
-        drupal_set_message($out, 'warning');
-        return $out;
+        return '';
     }
+
+    if ($status['status'] === 'STATUS_FAILURE') {
+        drupal_set_message('Заказ не оплачен', 'warning');
+        return drupal_get_form('bc_oos_form');
+
+    }
+
+
 }
 
 /**
@@ -271,8 +267,8 @@ function bc_ooc_merchant_api()
     //curl_setopt($curl, CURLOPT_VERBOSE, 1);
     // use it if the following code fails with Exception "Could not get reply from OOS..."
     // попробуйте эти опции если не удается соединенится с сервером (Could not get reply from OOS)
-//    curl_setopt($curl, CURLOPT_SSLVERSION, 3);
-//    curl_setopt($curl, CURLOPT_SSL_CIPHER_LIST, 'SSLv3');
+    curl_setopt($curl, CURLOPT_SSLVERSION, 3);
+    curl_setopt($curl, CURLOPT_SSL_CIPHER_LIST, 'SSLv3');
 
     $response_text = curl_exec($curl);
     if ($response_text === false) {
