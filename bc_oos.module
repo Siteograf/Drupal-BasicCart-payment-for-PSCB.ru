@@ -35,13 +35,14 @@ function bc_oos_block_view($delta = '')
             break;
 
         case 'oos_order_status':
-            $block['subject'] = t('Статус оплаты');
+            $block['subject'] = t('Статус оплаты и кнопка оплатить');
             $block['content'] = bc_ooc_check_order_status();
             break;
     }
     return $block;
 }
 
+// Показывает таблицу товаров которые есть в заказе
 function bc_oos_products_in_order()
 {
     $node = node_load(arg(1));
@@ -52,13 +53,19 @@ function bc_oos_products_in_order()
     foreach ($result as $node) {
         $nodeObject = node_load($node->nid);
 
+        // эти поля в каждом случае свои
+        $img = $nodeObject->field_images['und'][0]['uri'];
+        $title = $nodeObject->title;
+        $price = intval($nodeObject->price['und'][0]["value"]) . ' руб';
+
         $data[] = array(
-            theme('image_style', array('style_name' => 'cart', 'path' => $nodeObject->field_images['und'][0]['uri'])),
-            $nodeObject->title,
-            intval($nodeObject->price['und'][0]["value"]) . ' руб'
+            theme('image_style', array('style_name' => 'cart', 'path' => $img)),
+            $title,
+            $price,
         );
     }
 
+    // Выводим таблицу 3 колонки
     return theme('table', array('header' => array('', '', ''), 'rows' => $data));
 
 }
@@ -68,23 +75,26 @@ function bc_oos_products_in_order()
  */
 function bc_oos_form($form, &$form_state)
 {
+    // Смотрим на какой странице назодимся
     $node = node_load(arg(1));
 
+    // Проверяем есть ли комментарий так как потом его оправляем в банк
     if (!$node->body) {
         $comment = '';
     } else {
         $comment = $node->body['und']['0']['safe_value'];
     }
 
+    // Строим объект для отправки в банк
     $message = array(
         "amount" => intval($node->field_total_price['und']['0']['safe_value']),
-        "details" => "test payment",
+        "details" => variable_get('uc_oos_details'),
         "customerRating" => "5",
         "customerAccount" => drupal_substr($node->title, 0, 128),
         "orderId" => $node->nid,
-        "successUrl" => variable_get('bc_url_success', ''),
-        "failUrl" => variable_get('bc_url_fail', ''),
-        "paymentMethod" => "",
+        "successUrl" => variable_get('bc_url_success', '') . '/node/' . $node->nid,
+        "failUrl" => variable_get('bc_url_fail', '') . '/node/' . $node->nid,
+        "paymentMethod" => variable_get('bc_oos_method_title'),
         "customerPhone" => strip_tags($node->field_phone['und']['0']['safe_value']),
         "customerEmail" => strip_tags($node->field_email['und']['0']['safe_value']),
         "customerComment" => strip_tags($node->field_address['und']['0']['safe_value'] . ' === ' . $comment),
@@ -151,6 +161,7 @@ function bc_oos_settings_form($op, &$order, $form = NULL, &$form_state = NULL)
         '#default_value' => variable_get('bc_oos_market_id', ''),
         '#size' => 16,
     );
+
     $form['bc_oos_secret_key'] = array(
         '#type' => 'textfield',
         '#title' => t('Ключ API'),
@@ -170,7 +181,7 @@ function bc_oos_settings_form($op, &$order, $form = NULL, &$form_state = NULL)
     $form['bc_oos_merchant_api_url_base'] = array(
         '#type' => 'textfield',
         '#title' => t('URL Merchant API for checking orders'),
-        '#description' => t('URl для получения ответа о платеже'),
+        '#description' => t('URL для получения ответа о платеже'),
         '#default_value' => variable_get('bc_oos_merchant_api_url_base', 'https://oosdemo.pscb.ru/merchantApi'),
         '#size' => 64,
     );
@@ -179,16 +190,28 @@ function bc_oos_settings_form($op, &$order, $form = NULL, &$form_state = NULL)
         '#type' => 'textfield',
         '#title' => t('Success URL'),
         '#default_value' => variable_get('bc_url_success', ""),
+        '#description' => t('Впишите адрес сайта. Слеш / в конеце не ставить. Будет перенаправлен на страницу заказа. '),
     );
+
     $form['bc_url_fail'] = array(
         '#type' => 'textfield',
         '#title' => t('Fail URL'),
         '#default_value' => variable_get('bc_url_fail', ""),
+        '#description' => t('Впишите адрес сайта. Слеш / в конеце не ставить. Будет перенаправлен на страницу заказа. '),
     );
+
     $form['uc_oos_method_title'] = array(
         '#type' => 'textfield',
         '#title' => t('Payment method title'),
-        '#default_value' => variable_get('bc_oos_method_title', t('OOS Payment System:')),
+        '#default_value' => variable_get('bc_oos_method_title', ''),
+        '#description' => t('Лучше оставить пустым или читай http://docs.pscb.ru/oos/paypage.html'),
+    );
+
+    $form['uc_oos_details'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Payment details'),
+        '#default_value' => variable_get('uc_oos_details', ''),
+        '#description' => t('Не обязательно. Описание заказа (платежа). При передаче его в различные платежные системы оно может быть сокращено; например для ЯД передаются первые 64 символа. Читай http://docs.pscb.ru/oos/paypage.html'),
     );
 
     return system_settings_form($form);
@@ -198,10 +221,9 @@ function bc_oos_settings_form($op, &$order, $form = NULL, &$form_state = NULL)
 function bc_ooc_check_order_status()
 {
     $status = bc_ooc_merchant_api();
-    var_dump($status);
+//    var_dump($status);
 
     if ($status['status'] === 'STATUS_SUCCESS') {
-
 
         $state = $status['payment']['state'];
         $amount = $status['payment']['amount'];
@@ -221,7 +243,6 @@ function bc_ooc_check_order_status()
         return drupal_get_form('bc_oos_form');
 
     }
-
 
 }
 
@@ -267,8 +288,8 @@ function bc_ooc_merchant_api()
     //curl_setopt($curl, CURLOPT_VERBOSE, 1);
     // use it if the following code fails with Exception "Could not get reply from OOS..."
     // попробуйте эти опции если не удается соединенится с сервером (Could not get reply from OOS)
-    curl_setopt($curl, CURLOPT_SSLVERSION, 3);
-    curl_setopt($curl, CURLOPT_SSL_CIPHER_LIST, 'SSLv3');
+//    curl_setopt($curl, CURLOPT_SSLVERSION, 3);
+//    curl_setopt($curl, CURLOPT_SSL_CIPHER_LIST, 'SSLv3');
 
     $response_text = curl_exec($curl);
     if ($response_text === false) {
