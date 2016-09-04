@@ -45,7 +45,10 @@ function bc_oos_block_view($delta = '')
 // Показывает таблицу товаров которые есть в заказе
 function bc_oos_products_in_order()
 {
+
     $node = node_load(arg(1));
+
+    drupal_set_title('Заказ № ' . $node->nid);
 
     $result = db_query("SELECT nid FROM {basic_cart_order_node} WHERE oid = :currentNid", array(':currentNid' => $node->nid));
 
@@ -67,7 +70,6 @@ function bc_oos_products_in_order()
 
     // Выводим таблицу 3 колонки
     return theme('table', array('header' => array('', '', ''), 'rows' => $data));
-
 }
 
 /**
