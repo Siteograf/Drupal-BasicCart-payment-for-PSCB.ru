@@ -80,6 +80,15 @@ function bc_oos_form($form, &$form_state)
     // Смотрим на какой странице назодимся
     $node = node_load(arg(1));
 
+    // Publish node-order
+    if ($node->status == "0") {
+        // set status property to 1
+        $node->status = 1;
+        // re-save the node
+        node_save($node);
+    }
+
+
     // Проверяем есть ли комментарий так как потом его оправляем в банк
     if (!$node->body) {
         $comment = '';
@@ -125,7 +134,7 @@ function bc_oos_form($form, &$form_state)
     $form['actions']['submit'] = array(
         '#type' => 'submit',
         '#value' => t('Оплатить онлайн'),
-        '#attributes' => array('class' => array( variable_get('uc_oos_button_class') )),
+        '#attributes' => array('class' => array(variable_get('uc_oos_button_class'))),
     );
     return $form;
 }
