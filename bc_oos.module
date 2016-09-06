@@ -99,7 +99,7 @@ function bc_oos_form($form, &$form_state)
         "paymentMethod" => variable_get('bc_oos_method_title'),
         "customerPhone" => strip_tags($node->field_phone['und']['0']['safe_value']),
         "customerEmail" => strip_tags($node->field_email['und']['0']['safe_value']),
-        "customerComment" => strip_tags($node->field_address['und']['0']['safe_value'] . ' === ' . $comment),
+        "customerComment" => strip_tags($node->title . ' === ' . $node->field_address['und']['0']['safe_value'] . ' === ' . $comment),
         "data" => array(
             "user" => "",
             "debug" => "1",
@@ -125,7 +125,7 @@ function bc_oos_form($form, &$form_state)
     $form['actions']['submit'] = array(
         '#type' => 'submit',
         '#value' => t('Оплатить онлайн'),
-        '#attributes' => array('class' => array('zakaz')),
+        '#attributes' => array('class' => array( variable_get('uc_oos_button_class') )),
     );
     return $form;
 }
@@ -214,6 +214,13 @@ function bc_oos_settings_form($op, &$order, $form = NULL, &$form_state = NULL)
         '#title' => t('Payment details'),
         '#default_value' => variable_get('uc_oos_details', ''),
         '#description' => t('Не обязательно. Описание заказа (платежа). При передаче его в различные платежные системы оно может быть сокращено; например для ЯД передаются первые 64 символа. Читай http://docs.pscb.ru/oos/paypage.html'),
+    );
+
+    $form['uc_oos_button_class'] = array(
+        '#type' => 'textfield',
+        '#title' => t('CSS class for button'),
+        '#default_value' => variable_get('uc_oos_button_class', 'payonline'),
+        '#description' => t('Этот клас будет у кнопки для оплаты онлайн'),
     );
 
     return system_settings_form($form);
